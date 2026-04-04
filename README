@@ -1,0 +1,9 @@
+This project (Orin) is a CI/CD tool for automating update server-side's services.
+
+It requires a valid JDK installation(JDK 22 or above) to run, and in most cases, a valid network port is required for Github webhooks.
+
+For it's old GoLang implementation, see https://github.com/glowingstone124/GoCi.
+
+Its name was inspired from Kaenbyou Rin, a character from Touhou Project.
+
+2026 Quantum Original & Holographic Lab
