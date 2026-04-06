@@ -8,7 +8,7 @@ class DefaultGithubPreprocessor : EventProcessor<GithubPushEvent> {
 	private val logger = KotlinLogging.logger("DefaultGithubPreprocessor")
 	override fun process(args: GithubPushEvent) {
 		args.commits.forEach { commit ->
-			val author = commit.author.name ?: "unknown"
+			val author = commit.author.name
 			logger.info{
 				"""
 					--------------------------------------------

@@ -5,14 +5,16 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
-import io.ktor.server.request.receive
+import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.qo.action.DefaultGithubPreprocessor
+
+interface Events
 
 @Serializable
 data class GithubPushEvent(
@@ -22,7 +24,7 @@ data class GithubPushEvent(
 	val commits: List<Commit>,
 	@SerialName("sender")
 	val sender: Sender
-) {
+) : Events{
 	@Serializable
 	data class Repository(
 		@SerialName("name")
@@ -54,21 +56,21 @@ class WebHook {
 	private val logger = KotlinLogging.logger("WebHook")
 
 	fun runWebhookEndpoint(cfg: Config.Webhook) {
+		logger.info { "Starting webhook on ${cfg.endpoint}:${cfg.port}" }
 		embeddedServer(Netty, port = cfg.port, host = cfg.endpoint) {
 			routing {
 				get("/") {
 					call.respond(HttpStatusCode.OK, "Orin running")
 				}
-				get("/webhook") {
-					if(parseGithubWebHook(call.receive<String>())) {
+				post("/webhook") {
+					if (parseGithubWebHook(call.receiveText())) {
 						call.respond(HttpStatusCode.OK)
 					} else {
 						call.respond(HttpStatusCode.InternalServerError)
 					}
 				}
 			}
-		}
-		logger.info { "Webhook started" }
+		}.start(wait = true)
 	}
 
 	fun parseGithubWebHook(payload: String): Boolean {
@@ -82,10 +84,12 @@ class WebHook {
 			"Received Github PUSH Webhook for repository: ${event.repository.name}"
 		}
 		logger.debug {
-			"Executing processor.process(event)"
+			"Dispatching GithubPushEvent to registered processors"
 		}
-		val processor = DefaultGithubPreprocessor()
-		processor.process(event)
+		val processorCount = ActionsDiscover.dispatch(event)
+		if (processorCount == 0) {
+			logger.warn { "No processors registered for GithubPushEvent" }
+		}
 
 		return true
 	}

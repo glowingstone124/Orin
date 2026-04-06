@@ -1,5 +1,6 @@
 plugins {
 	kotlin("jvm") version "2.3.10"
+	kotlin("plugin.serialization") version "2.3.10"
 	id("io.ktor.plugin") version "3.4.1"
 }
 
@@ -19,6 +20,7 @@ dependencies {
 	implementation("io.ktor:ktor-server-netty")
 	implementation("com.akuleshov7:ktoml-core:0.7.1")
 	implementation("com.akuleshov7:ktoml-file:0.7.1")
+	implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.9.0")
 }
 
 kotlin {
@@ -26,7 +28,7 @@ kotlin {
 }
 
 application {
-	mainClass.set("org.qo.Main")
+	mainClass.set("org.qo.MainKt")
 }
 tasks.test {
 	useJUnitPlatform()
