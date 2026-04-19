@@ -5,6 +5,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.ktor.server.request.receiveNullable
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
@@ -13,6 +14,7 @@ import io.ktor.server.routing.routing
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.qo.pipeline.PipelineService
 
 interface Events
 
@@ -51,7 +53,9 @@ data class GithubPushEvent(
 		val login: String
 	)
 }
-class WebHook {
+class WebHook(
+	private val pipelineService: PipelineService = PipelineService(emptyList()),
+) {
 	private val gson = Gson()
 	private val logger = KotlinLogging.logger("WebHook")
 
@@ -67,6 +71,38 @@ class WebHook {
 						call.respond(HttpStatusCode.OK)
 					} else {
 						call.respond(HttpStatusCode.InternalServerError)
+					}
+				}
+				post("/webhook/github") {
+					if (parseGithubWebHook(call.receiveText())) {
+						call.respond(HttpStatusCode.OK)
+					} else {
+						call.respond(HttpStatusCode.InternalServerError)
+					}
+				}
+				post("/trigger/{pipeline}") {
+					val pipelineName = call.parameters["pipeline"]
+					if (pipelineName == null) {
+						call.respond(HttpStatusCode.BadRequest, "Missing pipeline name.")
+						return@post
+					}
+					val rawBody = call.receiveNullable<String>()?.trim().orEmpty()
+					val request = parseManualTriggerRequest(rawBody) ?: run {
+						call.respond(HttpStatusCode.BadRequest, "Invalid trigger payload.")
+						return@post
+					}
+					val result = pipelineService.triggerPipeline(pipelineName, request)
+					when (result.status) {
+						PipelineService.ManualTriggerStatus.SUCCESS ->
+							call.respond(HttpStatusCode.OK, result.message)
+						PipelineService.ManualTriggerStatus.NOT_FOUND ->
+							call.respond(HttpStatusCode.NotFound, result.message)
+						PipelineService.ManualTriggerStatus.DISABLED ->
+							call.respond(HttpStatusCode.Conflict, result.message)
+						PipelineService.ManualTriggerStatus.UNAUTHORIZED ->
+							call.respond(HttpStatusCode.Unauthorized, result.message)
+						PipelineService.ManualTriggerStatus.FAILED ->
+							call.respond(HttpStatusCode.InternalServerError, result.message)
 					}
 				}
 			}
@@ -92,5 +128,16 @@ class WebHook {
 		}
 
 		return true
+	}
+
+	fun parseManualTriggerRequest(payload: String): PipelineService.ManualTriggerRequest? {
+		if (payload.isBlank()) {
+			return PipelineService.ManualTriggerRequest()
+		}
+		return runCatching {
+			gson.fromJson(payload, PipelineService.ManualTriggerRequest::class.java)
+		}.onFailure {
+			logger.error(it) { "Error parsing manual trigger payload: $payload" }
+		}.getOrNull()
 	}
 }

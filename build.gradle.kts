@@ -21,6 +21,8 @@ dependencies {
 	implementation("com.akuleshov7:ktoml-core:0.7.1")
 	implementation("com.akuleshov7:ktoml-file:0.7.1")
 	implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.9.0")
+	implementation("org.jetbrains.kotlin:kotlin-scripting-jvm:2.3.10")
+	implementation("org.jetbrains.kotlin:kotlin-scripting-jvm-host:2.3.10")
 }
 
 kotlin {
