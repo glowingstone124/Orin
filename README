@@ -3,12 +3,45 @@ This project (Orin) is a CI/CD tool for automating update server-side's services
 It requires a valid JDK installation(JDK 22 or above) to run, and in most cases, a valid network port is required for Github webhooks.
 
 Current minimal workflow support:
-- `POST /webhook` or `POST /webhook/github` accepts a GitHub push payload and dispatches matching pipelines.
-- `POST /trigger/{pipeline}` triggers a configured pipeline manually. Request body can be empty or:
-  `{"token":"change-me","inputs":{"branch":"main"}}`
+- `POST /webhook` or `POST /webhook/github` accepts an authenticated GitHub push payload and queues matching pipelines.
+- `POST /trigger/{pipeline}` triggers a configured pipeline manually. Send the configured token and optional inputs:
+  `{"token":"the-manual-token","inputs":{"branch":"main"}}`
 - Pipelines reference actions by name, and each action is loaded from `actions/<name>/entry.toml`.
 - Action entry can be either `.kts` or `.sh`.
-- KTS actions receive a restricted read-only `context` plus a small `orin` API.
+- KTS actions receive a selectively exposed read-only `context` plus a small `orin` API. Actions are trusted CI code and are not sandboxed.
+- Pipeline execution uses a bounded single-worker queue so actions never concurrently mutate the shared workspace.
+- Action processes have configurable execution time and captured-output limits.
+
+Configure both authentication secrets directly in `config.toml`:
+
+```toml
+[Webhook]
+githubSecret = "the-secret-configured-in-github"
+
+[[Pipeline]]
+manualToken = "a-separate-manual-trigger-token"
+```
+
+The configuration contains plaintext credentials. Limit its filesystem access and
+repository visibility accordingly. Orin refuses to start when an enabled trigger
+does not have its required secret configured.
+
+GitHub deliveries must include `X-GitHub-Event: push` and a valid
+`X-Hub-Signature-256: sha256=<hmac>` header. Orin returns `202 Accepted` after the
+matching pipeline has entered the runner queue. A full queue returns `503` so
+GitHub can retry the delivery.
+
+`[Runner]` controls the bounded queue and process limits:
+
+```toml
+[Runner]
+queueCapacity = 100
+actionTimeoutSeconds = 900
+maxOutputBytes = 1048576
+```
+
+Manual triggers run through the same queue and wait for completion. A full queue
+returns HTTP `429`.
 
 Example action layout:
 `actions/github-push-summary/entry.toml`

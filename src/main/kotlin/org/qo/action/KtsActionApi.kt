@@ -26,6 +26,9 @@ class KtsActionApi(
 		val command: String,
 		val stdout: String,
 		val stderr: String,
+		val timedOut: Boolean,
+		val stdoutTruncated: Boolean,
+		val stderrTruncated: Boolean,
 		val context: CommandContext,
 	) {
 		val stdoutTrimmed: String
@@ -34,11 +37,11 @@ class KtsActionApi(
 		val stderrTrimmed: String
 			get() = stderr.trim()
 
-		fun requireSuccess(): CommandResult {
-			if (!success) {
-				throw IllegalStateException(
-					"Command failed with exitCode=$exitCode command=$command stderr=${stderrTrimmed.ifBlank { "<empty>" }}"
-				)
+			fun requireSuccess(): CommandResult {
+				if (!success) {
+					throw IllegalStateException(
+						"Command failed with exitCode=$exitCode timedOut=$timedOut command=$command stderr=${stderrTrimmed.ifBlank { "<empty>" }}"
+					)
 			}
 			return this
 		}
@@ -69,11 +72,14 @@ class KtsActionApi(
 			throw IllegalStateException("Failed to start bash command: $command", error)
 		}
 		return CommandResult(
-			success = result.code == 0,
+			success = result.code == 0 && !result.timedOut,
 			exitCode = result.code,
 			command = command,
 			stdout = result.stdout,
 			stderr = result.stderr,
+			timedOut = result.timedOut,
+			stdoutTruncated = result.stdoutTruncated,
+			stderrTruncated = result.stderrTruncated,
 			context = commandContext(context),
 		)
 	}
@@ -92,11 +98,14 @@ class KtsActionApi(
 			throw IllegalStateException("Failed to start shell script: $scriptPath", error)
 		}
 		return CommandResult(
-			success = result.code == 0,
+			success = result.code == 0 && !result.timedOut,
 			exitCode = result.code,
 			command = resolvedScript.toString(),
 			stdout = result.stdout,
 			stderr = result.stderr,
+			timedOut = result.timedOut,
+			stdoutTruncated = result.stdoutTruncated,
+			stderrTruncated = result.stderrTruncated,
 			context = commandContext(context),
 		)
 	}

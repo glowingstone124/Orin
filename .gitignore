@@ -1,4 +1,6 @@
 .gradle
+.gradle-user-home/
+.orin/
 build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
@@ -43,4 +45,4 @@ bin/
 .vscode/
 
 ### Mac OS ###
-.DS_Store.idea/
+.DS_Store

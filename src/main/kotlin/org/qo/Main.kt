@@ -8,6 +8,8 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import org.qo.action.DefaultGithubPreprocessor
 import org.qo.pipeline.PipelineService
+import org.qo.systemUtils.SystemCmdExecutor
+import java.time.Duration
 
 private val logger = KotlinLogging.logger("Main")
 
@@ -20,10 +22,30 @@ fun main(args: Array<String>) {
 		logger.warn { "Bash not found. Some features may not work properly." }
 	}
 	val cfg = Toml.decodeFromString<Config.Cfg>(Files.readString(Paths.get("config.toml")))
-	val pipelineService = PipelineService(cfg.pipelines)
+	cfg.pipelines
+		.filter { it.enabled && it.triggers.contains(PipelineService.MANUAL_TRIGGER) }
+		.forEach { pipeline ->
+			require(!pipeline.manualToken.isNullOrBlank()) {
+				"Manual trigger authentication is not configured for pipeline ${pipeline.name}."
+			}
+		}
+	val pipelineService = PipelineService(
+		pipelines = cfg.pipelines,
+		systemCmdExecutor = SystemCmdExecutor(
+			timeout = Duration.ofSeconds(cfg.runner.actionTimeoutSeconds),
+			maxOutputBytes = cfg.runner.maxOutputBytes,
+		),
+		queueCapacity = cfg.runner.queueCapacity,
+	)
 	ActionsDiscover.register(GithubPushEvent::class.java, DefaultGithubPreprocessor(pipelineService))
 	if (cfg.webhook.enabled) {
+		require(cfg.webhook.githubSecret.isNotBlank()) {
+			"Webhook is enabled but githubSecret is missing or empty."
+		}
 		logger.info { "Webhook enabled" }
-		WebHook(pipelineService).runWebhookEndpoint(cfg.webhook)
+		WebHook(
+			pipelineService = pipelineService,
+			githubAuthenticator = GithubWebhookAuthenticator(cfg.webhook.githubSecret),
+		).runWebhookEndpoint(cfg.webhook)
 	}
 }

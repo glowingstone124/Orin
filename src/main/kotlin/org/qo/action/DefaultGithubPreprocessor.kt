@@ -10,9 +10,13 @@ class DefaultGithubPreprocessor(
 ) : EventProcessor<GithubPushEvent> {
 	private val logger = KotlinLogging.logger("DefaultGithubPreprocessor")
 	override fun process(args: GithubPushEvent) {
-		val executions = pipelineService.handleGithubPush(args)
-		if (executions.isEmpty()) {
+		val submissions = pipelineService.enqueueGithubPush(args)
+		if (submissions.isEmpty()) {
 			logger.info { "Github push received but no pipeline was executed for repository=${args.repository.name}" }
+		} else {
+			logger.info {
+				"Github push queued submissions=${submissions.joinToString { it.id.toString() }} repository=${args.repository.name}"
+			}
 		}
 	}
 }

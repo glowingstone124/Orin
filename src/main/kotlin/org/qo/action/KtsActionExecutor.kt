@@ -14,6 +14,7 @@ import kotlin.script.experimental.jvm.jvm
 import kotlin.script.experimental.jvmhost.BasicJvmScriptingHost
 import kotlin.script.experimental.jvmhost.createJvmCompilationConfigurationFromTemplate
 import org.qo.pipeline.ActionExecutionContext
+import org.qo.systemUtils.SystemCmdExecutor
 
 object OrinActionScriptCompilationConfiguration : ScriptCompilationConfiguration({
 	jvm {
@@ -32,7 +33,9 @@ abstract class OrinActionScriptTemplate(
 	val orin: KtsActionApi,
 )
 
-class KtsActionExecutor {
+class KtsActionExecutor(
+	private val systemCmdExecutor: SystemCmdExecutor = SystemCmdExecutor(),
+) {
 	private val logger = KotlinLogging.logger("KtsActionExecutor")
 	private val host = BasicJvmScriptingHost()
 	private val compilationConfiguration: ScriptCompilationConfiguration =
@@ -41,7 +44,7 @@ class KtsActionExecutor {
 	fun execute(context: ActionExecutionContext, action: LoadedAction) {
 		val scriptContext = context.toKtsActionContext(action.manifest.kts.expose)
 		val evaluationConfiguration = ScriptEvaluationConfiguration {
-			constructorArgs(scriptContext, KtsActionApi(logger, context))
+				constructorArgs(scriptContext, KtsActionApi(logger, context, systemCmdExecutor))
 		}
 		val result = host.eval(
 			script = FileScriptSource(action.entryPath.toFile()),
