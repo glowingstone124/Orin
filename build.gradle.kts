@@ -35,3 +35,9 @@ application {
 tasks.test {
 	useJUnitPlatform()
 }
+
+tasks.withType<org.gradle.jvm.tasks.Jar>().configureEach {
+    from(listOf("LICENSE", "COPYING")) {
+        into("META-INF/licenses/orin")
+    }
+}
