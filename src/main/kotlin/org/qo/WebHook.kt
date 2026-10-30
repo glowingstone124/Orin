@@ -121,7 +121,8 @@ class WebHook(
 		}
 
 	private suspend fun handleGithubWebhook(call: ApplicationCall, cfg: Config.Webhook) {
-		if (call.request.header(GITHUB_EVENT_HEADER) != GITHUB_PUSH_EVENT) {
+		val eventType = call.request.header(GITHUB_EVENT_HEADER)
+		if (eventType != GITHUB_PUSH_EVENT && eventType != "ping") {
 			call.respond(HttpStatusCode.BadRequest, "Unsupported or missing Github event type.")
 			return
 		}
@@ -137,6 +138,10 @@ class WebHook(
 		) {
 			logger.warn { "Rejected Github webhook with an invalid signature." }
 			call.respond(HttpStatusCode.Unauthorized, "Invalid Github webhook signature.")
+			return
+		}
+		if (eventType == "ping") {
+			call.respond(HttpStatusCode.OK, "Orin webhook ready")
 			return
 		}
 		val accepted = try {
