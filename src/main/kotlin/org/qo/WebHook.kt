@@ -27,12 +27,17 @@ data class GithubPushEvent(
 	@SerialName("commits")
 	val commits: List<Commit>,
 	@SerialName("sender")
-	val sender: Sender
+	val sender: Sender,
+	val ref: String? = null,
+	val after: String? = null,
+	val deleted: Boolean = false,
 ) : Events{
 	@Serializable
 	data class Repository(
 		@SerialName("name")
-		val name: String
+		val name: String,
+		@SerialName("full_name")
+		val full_name: String? = null,
 	)
 
 	@Serializable

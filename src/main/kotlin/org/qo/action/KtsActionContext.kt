@@ -21,6 +21,10 @@ data class KtsActionContext(
 		val sender: String,
 		val commitCount: Int,
 		val commits: List<CommitInfo>,
+		val ref: String? = null,
+		val after: String? = null,
+		val deleted: Boolean = false,
+		val fullName: String? = null,
 	) {
 		data class CommitInfo(
 			val message: String,

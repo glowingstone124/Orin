@@ -57,6 +57,10 @@ data class ActionExecutionContext(
 			repository = repository.name,
 			sender = sender.login,
 			commitCount = commits.size,
+			ref = ref,
+			after = after,
+			deleted = deleted,
+			fullName = repository.full_name,
 			commits = commits.map { commit ->
 				KtsActionContext.GithubInfo.CommitInfo(
 					message = commit.message,
