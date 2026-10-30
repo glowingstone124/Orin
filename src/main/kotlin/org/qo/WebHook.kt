@@ -67,13 +67,13 @@ class WebHook(
 	private val gson = Gson()
 	private val logger = KotlinLogging.logger("WebHook")
 
-	fun runWebhookEndpoint(cfg: Config.Webhook) {
+	fun createServer(cfg: Config.Webhook): io.ktor.server.engine.EmbeddedServer<*, *> {
 		requireNotNull(githubAuthenticator) {
 			"Github webhook authentication must be configured before starting the endpoint."
 		}
 		require(cfg.maxRequestBytes > 0) { "Webhook maxRequestBytes must be positive." }
 		logger.info { "Starting webhook on ${cfg.endpoint}:${cfg.port}" }
-		embeddedServer(Netty, port = cfg.port, host = cfg.endpoint) {
+		return embeddedServer(Netty, port = cfg.port, host = cfg.endpoint) {
 			routing {
 				get("/") {
 					call.respond(HttpStatusCode.OK, "Orin running")
@@ -117,8 +117,12 @@ class WebHook(
 					}
 				}
 			}
-		}.start(wait = true)
 		}
+	}
+
+	fun runWebhookEndpoint(cfg: Config.Webhook) {
+		createServer(cfg).start(wait = true)
+	}
 
 	private suspend fun handleGithubWebhook(call: ApplicationCall, cfg: Config.Webhook) {
 		val eventType = call.request.header(GITHUB_EVENT_HEADER)
