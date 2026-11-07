@@ -35,6 +35,8 @@ fun main(args: Array<String>) {
 			timeout = Duration.ofSeconds(cfg.runner.actionTimeoutSeconds),
 			maxOutputBytes = cfg.runner.maxOutputBytes,
 		),
+		clusterConfig = cfg.cluster,
+		remotes = cfg.remotes,
 		queueCapacity = cfg.runner.queueCapacity,
 	)
 	ActionsDiscover.register(GithubPushEvent::class.java, DefaultGithubPreprocessor(pipelineService))
@@ -46,6 +48,7 @@ fun main(args: Array<String>) {
 		WebHook(
 			pipelineService = pipelineService,
 			githubAuthenticator = GithubWebhookAuthenticator(cfg.webhook.githubSecret),
+			clusterConfig = cfg.cluster,
 		).runWebhookEndpoint(cfg.webhook)
 	}
 }

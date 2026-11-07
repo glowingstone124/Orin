@@ -12,6 +12,10 @@ class Config {
 		val pipelines: List<Pipeline> = emptyList(),
 		@SerialName("Runner")
 		val runner: Runner = Runner(),
+		@SerialName("Cluster")
+		val cluster: Cluster = Cluster(),
+		@SerialName("Remote")
+		val remotes: List<Remote> = emptyList(),
 	)
 	@Serializable
 	data class Webhook(
@@ -37,5 +41,17 @@ class Config {
 		val triggers: List<String> = emptyList(),
 		val manualToken: String? = null,
 		val actions: List<String> = emptyList(),
+	)
+
+	@Serializable
+	data class Cluster(
+		val nodeToken: String? = null,
+	)
+
+	@Serializable
+	data class Remote(
+		val name: String,
+		val url: String,
+		val token: String? = null,
 	)
 }

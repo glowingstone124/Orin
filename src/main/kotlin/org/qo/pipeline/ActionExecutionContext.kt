@@ -49,6 +49,7 @@ data class ActionExecutionContext(
 			} else {
 				null
 			},
+			jobId = if (Exposure.JOB in exposures) pipelineContext.jobId else null,
 		)
 	}
 
@@ -76,7 +77,8 @@ data class ActionExecutionContext(
 		TRIGGER("trigger"),
 		INPUTS("inputs"),
 		GITHUB("github"),
-		PATHS("paths");
+		PATHS("paths"),
+		JOB("job");
 
 		companion object {
 			fun from(value: String): Exposure {

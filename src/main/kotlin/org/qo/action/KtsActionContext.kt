@@ -7,6 +7,7 @@ data class KtsActionContext(
 	val inputs: Map<String, String> = emptyMap(),
 	val github: GithubInfo? = null,
 	val paths: PathsInfo? = null,
+	val jobId: String? = null,
 ) {
 	data class PipelineInfo(
 		val name: String,

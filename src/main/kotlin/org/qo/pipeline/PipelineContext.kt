@@ -8,12 +8,14 @@ data class PipelineContext(
 	val trigger: String,
 	val githubPushEvent: GithubPushEvent? = null,
 	val inputs: Map<String, String> = emptyMap(),
+	val jobId: String? = null,
 ) {
 	fun environmentVariables(): Map<String, String> {
 		val values = linkedMapOf(
 			"ORIN_PIPELINE" to pipeline.name,
 			"ORIN_TRIGGER" to trigger,
 		)
+		jobId?.let { values["ORIN_JOB_ID"] = it }
 		githubPushEvent?.let { event ->
 			values["ORIN_REPOSITORY"] = event.repository.name
 			values["ORIN_SENDER"] = event.sender.login

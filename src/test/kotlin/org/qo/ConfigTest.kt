@@ -21,6 +21,14 @@ class ConfigTest {
 					actionTimeoutSeconds = 60
 					maxOutputBytes = 4096
 
+					[Cluster]
+					nodeToken = "cluster-secret"
+
+					[[Remote]]
+					name = "NodeB"
+					url = "http://127.0.0.1:9913"
+					token = "nodeb-token"
+
 					[[Pipeline]]
 				name = "default-github-build"
 				enabled = true
@@ -36,6 +44,11 @@ class ConfigTest {
 		assertEquals(25, cfg.runner.queueCapacity)
 		assertEquals(60, cfg.runner.actionTimeoutSeconds)
 		assertEquals(4096, cfg.runner.maxOutputBytes)
+		assertEquals("cluster-secret", cfg.cluster.nodeToken)
+		assertEquals(1, cfg.remotes.size)
+		assertEquals("NodeB", cfg.remotes.single().name)
+		assertEquals("http://127.0.0.1:9913", cfg.remotes.single().url)
+		assertEquals("nodeb-token", cfg.remotes.single().token)
 		assertEquals(1, cfg.pipelines.size)
 		assertEquals("default-github-build", cfg.pipelines.single().name)
 		assertEquals(2, cfg.pipelines.single().actions.size)

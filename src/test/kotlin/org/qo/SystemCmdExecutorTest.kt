@@ -2,12 +2,28 @@ package org.qo
 
 import org.qo.systemUtils.SystemCmdExecutor
 import java.time.Duration
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SystemCmdExecutorTest {
+	@Test
+	fun `forwards stdout and stderr to callback`() {
+		val executor = SystemCmdExecutor(timeout = Duration.ofSeconds(5))
+		val output = CopyOnWriteArrayList<String>()
+
+		val result = executor.executeByBash(
+			cmd = "printf 'stdout-line\\n'; printf 'stderr-line\\n' >&2",
+			onOutput = { channel, chunk -> output += "${channel.name}:$chunk" },
+		).getOrThrow()
+
+		assertEquals(0, result.code)
+		assertTrue(output.any { it.startsWith("STDOUT:") && it.contains("stdout-line") })
+		assertTrue(output.any { it.startsWith("STDERR:") && it.contains("stderr-line") })
+	}
+
 	@Test
 	fun `captures stdout and stderr concurrently with bounded output`() {
 		val executor = SystemCmdExecutor(

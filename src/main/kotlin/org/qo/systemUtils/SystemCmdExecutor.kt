@@ -15,6 +15,11 @@ class SystemCmdExecutor(
 ) {
 	private val logger = KotlinLogging.logger("SystemCmdExecutor")
 
+	enum class OutputChannel {
+		STDOUT,
+		STDERR,
+	}
+
 	init {
 		require(!timeout.isZero && !timeout.isNegative) { "Command timeout must be positive." }
 		require(maxOutputBytes > 0) { "Command maxOutputBytes must be positive." }
@@ -33,6 +38,7 @@ class SystemCmdExecutor(
 		cmd: Array<String>,
 		environment: Map<String, String> = emptyMap(),
 		workingDirectory: Path? = null,
+		onOutput: ((OutputChannel, String) -> Unit)? = null,
 	): Result<ExecutionResult> = runCatching {
 		val builder = ProcessBuilder(*cmd)
 		builder.environment().putAll(environment)
@@ -43,10 +49,10 @@ class SystemCmdExecutor(
 		val stdout = BoundedStreamCapture(maxOutputBytes)
 		val stderr = BoundedStreamCapture(maxOutputBytes)
 		val stdoutReader = thread(name = "orin-process-stdout", isDaemon = true) {
-			stdout.readFrom(process.inputStream)
+			stdout.readFrom(process.inputStream, OutputChannel.STDOUT, onOutput)
 		}
 		val stderrReader = thread(name = "orin-process-stderr", isDaemon = true) {
-			stderr.readFrom(process.errorStream)
+			stderr.readFrom(process.errorStream, OutputChannel.STDERR, onOutput)
 		}
 
 		val completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)
@@ -89,10 +95,12 @@ class SystemCmdExecutor(
 		cmd: String,
 		environment: Map<String, String> = emptyMap(),
 		workingDirectory: Path? = null,
+		onOutput: ((OutputChannel, String) -> Unit)? = null,
 	): Result<ExecutionResult> = executeBinary(
 		cmd = arrayOf("bash", "-c", cmd),
 		environment = environment,
 		workingDirectory = workingDirectory,
+		onOutput = onOutput,
 	)
 
 	private class BoundedStreamCapture(private val limit: Int) {
@@ -104,7 +112,11 @@ class SystemCmdExecutor(
 		var failure: Exception? = null
 			private set
 
-		fun readFrom(stream: InputStream) {
+		fun readFrom(
+			stream: InputStream,
+			channel: OutputChannel,
+			onOutput: ((OutputChannel, String) -> Unit)?,
+		) {
 			try {
 				val buffer = ByteArray(BUFFER_SIZE)
 				while (true) {
@@ -119,6 +131,7 @@ class SystemCmdExecutor(
 					if (read > remaining) {
 						truncated = true
 					}
+					onOutput?.invoke(channel, String(buffer, 0, read, Charsets.UTF_8))
 				}
 			} catch (error: Exception) {
 				failure = error

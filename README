@@ -43,6 +43,44 @@ maxOutputBytes = 1048576
 Manual triggers run through the same queue and wait for completion. A full queue
 returns HTTP `429`.
 
+- Multi-node cluster orchestration:
+  - `POST /remote/trigger/{pipeline}` triggers a pipeline on a remote instance asynchronously, returning a `jobId`.
+  - `GET /remote/jobs/{jobId}/status` queries status (`QUEUED`, `RUNNING`, `SUCCESS`, `FAILED`) and registered artifacts.
+  - `GET /remote/jobs/{jobId}/artifacts/{artifactName}` downloads published binary artifacts.
+  - KTS API exposes `orin.remote("NodeB")`, `job.await()`, `job.downloadArtifact(...)`, and `orin.publishArtifact(...)`.
+
+- WebUI Console:
+  - Accessible directly at `http://localhost:9912/` (Single Page Application console).
+  - WebUI source is integrated as a git submodule in `webui/` (from `https://github.com/glowingstone124/Orin-WebUI`).
+  - REST endpoints under `/api/`: `/api/status`, `/api/pipelines`, `/api/jobs`, `/api/cluster/nodes`.
+
+## Build & Single Executable Packaging
+
+To build Orin and the WebUI together into a single self-contained executable:
+
+```bash
+./gradlew build
+```
+
+This will automatically:
+1. Compile the React WebUI frontend in `webui/`.
+2. Bundle the frontend assets into Orin's resources.
+3. Package everything into a single directly runnable executable:
+   - Self-executing binary: `build/bin/orin` (executable with `./build/bin/orin`)
+   - Standalone fat jar: `build/libs/Orin-all.jar` (runnable with `java -jar build/libs/Orin-all.jar`)
+
+Configure cluster secrets and remotes in `config.toml`:
+
+```toml
+[Cluster]
+nodeToken = "cluster-secret-shared-between-nodes"
+
+[[Remote]]
+name = "NodeB"
+url = "http://192.168.1.101:9912"
+token = "cluster-secret-shared-between-nodes"
+```
+
 Example action layout:
 `actions/github-push-summary/entry.toml`
 `actions/github-push-summary/main.kts`
