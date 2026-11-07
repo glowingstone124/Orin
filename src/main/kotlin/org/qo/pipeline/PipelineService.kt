@@ -163,14 +163,159 @@ class PipelineService(
 		)
 	}
 
+	data class ActionDetail(
+		val name: String,
+		val entry: String,
+		val entryType: String,
+		val content: String,
+		val manifestContent: String,
+		val lastModified: Long = 0L,
+		val size: Long = 0L,
+	)
+
+	data class ActionSummary(
+		val name: String,
+		val entry: String,
+		val entryType: String,
+		val lastModified: Long = 0L,
+		val size: Long = 0L,
+	)
+
 	fun getAvailableActions(): List<String> {
-		val actionsDir = workspaceRoot.resolve("actions")
-		if (!Files.exists(actionsDir) || !Files.isDirectory(actionsDir)) return emptyList()
-		return Files.list(actionsDir)
-			.filter { Files.isDirectory(it) }
-			.map { it.fileName.toString() }
-			.toList()
-			.sorted()
+		val actionsDir = workspaceRoot.resolve("actions").toFile()
+		if (!actionsDir.exists() || !actionsDir.isDirectory) return emptyList()
+		return actionsDir.listFiles()
+			?.filter { it.isDirectory }
+			?.map { it.name }
+			?.sorted() ?: emptyList()
+	}
+
+	fun getActionSummaries(): List<ActionSummary> {
+		val actionsDir = workspaceRoot.resolve("actions").toFile()
+		if (!actionsDir.exists() || !actionsDir.isDirectory) return emptyList()
+		val dirs = actionsDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
+		return dirs.mapNotNull { dir ->
+			val name = dir.name
+			val manifestFile = java.io.File(dir, "entry.toml")
+			var entry = "main.kts"
+			if (manifestFile.isFile) {
+				val content = manifestFile.readText()
+				val match = Regex("""entry\s*=\s*"([^"]+)"""").find(content)
+				if (match != null) {
+					entry = match.groupValues[1]
+				}
+			}
+			val entryFile = java.io.File(dir, entry)
+			val fileToStat = if (entryFile.isFile) entryFile else manifestFile
+			val entryType = when {
+				entry.endsWith(".kts") -> "kts"
+				entry.endsWith(".sh") -> "sh"
+				else -> "unknown"
+			}
+			ActionSummary(
+				name = name,
+				entry = entry,
+				entryType = entryType,
+				lastModified = if (fileToStat.exists()) fileToStat.lastModified() else 0L,
+				size = if (fileToStat.exists()) fileToStat.length() else 0L,
+			)
+		}.sortedBy { it.name }
+	}
+
+	fun getActionDetail(name: String): ActionDetail? {
+		if (!name.matches(Regex("^[a-zA-Z0-9_-]+$"))) return null
+		val actionsDir = workspaceRoot.resolve("actions").toFile()
+		val actionDir = java.io.File(actionsDir, name).canonicalFile
+		if (!actionDir.path.startsWith(actionsDir.canonicalPath) || !actionDir.isDirectory) {
+			return null
+		}
+		val manifestFile = java.io.File(actionDir, "entry.toml")
+		val manifestContent = if (manifestFile.isFile) manifestFile.readText() else ""
+		var entry = "main.kts"
+		val match = Regex("""entry\s*=\s*"([^"]+)"""").find(manifestContent)
+		if (match != null) {
+			entry = match.groupValues[1]
+		} else if (java.io.File(actionDir, "main.sh").isFile) {
+			entry = "main.sh"
+		}
+		val entryFile = java.io.File(actionDir, entry).canonicalFile
+		val scriptContent = if (entryFile.isFile) entryFile.readText() else ""
+		val entryType = when {
+			entry.endsWith(".kts") -> "kts"
+			entry.endsWith(".sh") -> "sh"
+			else -> "unknown"
+		}
+		val fileToStat = if (entryFile.isFile) entryFile else manifestFile
+		return ActionDetail(
+			name = name,
+			entry = entry,
+			entryType = entryType,
+			content = scriptContent,
+			manifestContent = manifestContent,
+			lastModified = if (fileToStat.exists()) fileToStat.lastModified() else 0L,
+			size = if (fileToStat.exists()) fileToStat.length() else 0L,
+		)
+	}
+
+	fun saveAction(name: String, entry: String, scriptContent: String, manifestContent: String? = null): Boolean {
+		if (!name.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
+			throw IllegalArgumentException("Invalid action name. Use only alphanumeric characters, underscores, and dashes.")
+		}
+		val safeEntry = if (entry.isBlank()) {
+			if (name.endsWith("-sh") || name.endsWith("_sh") || name.contains("shell")) "main.sh" else "main.kts"
+		} else {
+			entry.trim()
+		}
+		if (!safeEntry.matches(Regex("^[a-zA-Z0-9_.-]+$")) || (!safeEntry.endsWith(".kts") && !safeEntry.endsWith(".sh"))) {
+			throw IllegalArgumentException("Invalid entry file. Must end with .kts or .sh")
+		}
+
+		val actionsDir = workspaceRoot.resolve("actions").toFile()
+		actionsDir.mkdirs()
+		val actionDir = java.io.File(actionsDir, name).canonicalFile
+		if (!actionDir.path.startsWith(actionsDir.canonicalPath)) {
+			throw IllegalArgumentException("Action path resolves outside actions root.")
+		}
+		actionDir.mkdirs()
+
+		val manifestFile = java.io.File(actionDir, "entry.toml")
+		val effectiveManifest = if (!manifestContent.isNullOrBlank()) {
+			manifestContent
+		} else if (safeEntry.endsWith(".kts")) {
+			"""
+			entry = "$safeEntry"
+
+			[kts]
+			expose = ["pipeline", "action", "trigger", "inputs", "github", "paths"]
+			""".trimIndent() + "\n"
+		} else {
+			"""
+			entry = "$safeEntry"
+			""".trimIndent() + "\n"
+		}
+		manifestFile.writeText(effectiveManifest)
+
+		val scriptFile = java.io.File(actionDir, safeEntry).canonicalFile
+		if (!scriptFile.path.startsWith(actionDir.path)) {
+			throw IllegalArgumentException("Entry script path resolves outside action directory.")
+		}
+		scriptFile.writeText(scriptContent)
+		if (safeEntry.endsWith(".sh")) {
+			try {
+				scriptFile.setExecutable(true)
+			} catch (_: Exception) {}
+		}
+		return true
+	}
+
+	fun deleteAction(name: String): Boolean {
+		if (!name.matches(Regex("^[a-zA-Z0-9_-]+$"))) return false
+		val actionsDir = workspaceRoot.resolve("actions").toFile()
+		val actionDir = java.io.File(actionsDir, name).canonicalFile
+		if (!actionDir.path.startsWith(actionsDir.canonicalPath) || !actionDir.isDirectory) {
+			return false
+		}
+		return actionDir.deleteRecursively()
 	}
 
 	private fun persistConfig() {

@@ -207,8 +207,72 @@ class WebHook(
 					call.respond(HttpStatusCode.OK, gson.toJson(metrics))
 				}
 				get("/api/actions") {
-					val actions = pipelineService.getAvailableActions()
-					call.respond(HttpStatusCode.OK, gson.toJson(actions))
+					val detailsParam = call.request.queryParameters["details"]
+					if (detailsParam == "true") {
+						call.respond(HttpStatusCode.OK, gson.toJson(pipelineService.getActionSummaries()))
+					} else {
+						call.respond(HttpStatusCode.OK, gson.toJson(pipelineService.getAvailableActions()))
+					}
+				}
+				get("/api/actions/{name}") {
+					val name = call.parameters["name"] ?: run {
+						call.respond(HttpStatusCode.BadRequest, "Missing action name.")
+						return@get
+					}
+					val detail = pipelineService.getActionDetail(name)
+					if (detail == null) {
+						call.respond(HttpStatusCode.NotFound, "Action $name not found.")
+						return@get
+					}
+					call.respond(HttpStatusCode.OK, gson.toJson(detail))
+				}
+				post("/api/actions") {
+					val receivedBody = call.receiveLimitedText(cfg.maxRequestBytes) ?: ""
+					val payload = runCatching { gson.fromJson(receivedBody, Map::class.java) }.getOrNull()
+					val name = payload?.get("name") as? String ?: ""
+					val entry = payload?.get("entry") as? String ?: ""
+					val scriptContent = payload?.get("scriptContent") as? String ?: (payload?.get("content") as? String ?: "")
+					val manifestContent = payload?.get("manifestContent") as? String
+					try {
+						pipelineService.saveAction(name, entry, scriptContent, manifestContent)
+						call.respond(HttpStatusCode.Created, gson.toJson(mapOf("message" to "Action $name saved successfully.")))
+					} catch (e: IllegalArgumentException) {
+						call.respond(HttpStatusCode.BadRequest, e.message ?: "Invalid action payload.")
+					} catch (e: Exception) {
+						call.respond(HttpStatusCode.InternalServerError, e.message ?: "Failed to save action.")
+					}
+				}
+				put("/api/actions/{name}") {
+					val pathName = call.parameters["name"] ?: run {
+						call.respond(HttpStatusCode.BadRequest, "Missing action name.")
+						return@put
+					}
+					val receivedBody = call.receiveLimitedText(cfg.maxRequestBytes) ?: ""
+					val payload = runCatching { gson.fromJson(receivedBody, Map::class.java) }.getOrNull()
+					val name = (payload?.get("name") as? String)?.ifBlank { pathName } ?: pathName
+					val entry = payload?.get("entry") as? String ?: ""
+					val scriptContent = payload?.get("scriptContent") as? String ?: (payload?.get("content") as? String ?: "")
+					val manifestContent = payload?.get("manifestContent") as? String
+					try {
+						pipelineService.saveAction(name, entry, scriptContent, manifestContent)
+						call.respond(HttpStatusCode.OK, gson.toJson(mapOf("message" to "Action $name updated successfully.")))
+					} catch (e: IllegalArgumentException) {
+						call.respond(HttpStatusCode.BadRequest, e.message ?: "Invalid action payload.")
+					} catch (e: Exception) {
+						call.respond(HttpStatusCode.InternalServerError, e.message ?: "Failed to save action.")
+					}
+				}
+				delete("/api/actions/{name}") {
+					val name = call.parameters["name"] ?: run {
+						call.respond(HttpStatusCode.BadRequest, "Missing action name.")
+						return@delete
+					}
+					val deleted = pipelineService.deleteAction(name)
+					if (!deleted) {
+						call.respond(HttpStatusCode.NotFound, "Action $name not found.")
+						return@delete
+					}
+					call.respond(HttpStatusCode.OK, gson.toJson(mapOf("message" to "Action $name deleted.")))
 				}
 				get("/api/jobs") {
 					val jobsList = pipelineService.jobRegistry.allJobs()

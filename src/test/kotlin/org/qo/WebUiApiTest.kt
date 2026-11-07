@@ -239,4 +239,78 @@ class WebUiApiTest {
 		val delResp = client.send(delReq, HttpResponse.BodyHandlers.ofString())
 		assertEquals(200, delResp.statusCode())
 	}
+
+	@Test
+	fun `action script CRUD and editing operations`() {
+		// 1. Create a new action script
+		val createBody = """
+			{
+			  "name": "custom-test-action",
+			  "entry": "main.kts",
+			  "scriptContent": "orin.log(\"Hello from test action\")"
+			}
+		""".trimIndent()
+		val createReq = HttpRequest.newBuilder()
+			.uri(URI.create("http://127.0.0.1:$port/api/actions"))
+			.header("Content-Type", "application/json")
+			.POST(HttpRequest.BodyPublishers.ofString(createBody))
+			.build()
+		val createResp = client.send(createReq, HttpResponse.BodyHandlers.ofString())
+		assertEquals(201, createResp.statusCode())
+
+		// 2. Fetch action detail
+		val getReq = HttpRequest.newBuilder()
+			.uri(URI.create("http://127.0.0.1:$port/api/actions/custom-test-action"))
+			.GET()
+			.build()
+		val getResp = client.send(getReq, HttpResponse.BodyHandlers.ofString())
+		assertEquals(200, getResp.statusCode())
+		val detail = gson.fromJson(getResp.body(), Map::class.java)
+		assertEquals("custom-test-action", detail["name"])
+		assertEquals("main.kts", detail["entry"])
+		assertEquals("kts", detail["entryType"])
+		assertTrue((detail["content"] as String).contains("Hello from test action"))
+
+		// 3. Edit / update action script
+		val updateBody = """
+			{
+			  "entry": "main.kts",
+			  "scriptContent": "orin.log(\"Updated script execution\")"
+			}
+		""".trimIndent()
+		val updateReq = HttpRequest.newBuilder()
+			.uri(URI.create("http://127.0.0.1:$port/api/actions/custom-test-action"))
+			.header("Content-Type", "application/json")
+			.PUT(HttpRequest.BodyPublishers.ofString(updateBody))
+			.build()
+		val updateResp = client.send(updateReq, HttpResponse.BodyHandlers.ofString())
+		assertEquals(200, updateResp.statusCode())
+
+		// Verify updated content
+		val verifyResp = client.send(getReq, HttpResponse.BodyHandlers.ofString())
+		val verifyDetail = gson.fromJson(verifyResp.body(), Map::class.java)
+		assertTrue((verifyDetail["content"] as String).contains("Updated script execution"))
+
+		// 4. Fetch list with details
+		val listReq = HttpRequest.newBuilder()
+			.uri(URI.create("http://127.0.0.1:$port/api/actions?details=true"))
+			.GET()
+			.build()
+		val listResp = client.send(listReq, HttpResponse.BodyHandlers.ofString())
+		assertEquals(200, listResp.statusCode())
+		val list = gson.fromJson(listResp.body(), List::class.java)
+		assertTrue(list.any { (it as Map<*, *>)["name"] == "custom-test-action" })
+
+		// 5. Delete action script
+		val delReq = HttpRequest.newBuilder()
+			.uri(URI.create("http://127.0.0.1:$port/api/actions/custom-test-action"))
+			.DELETE()
+			.build()
+		val delResp = client.send(delReq, HttpResponse.BodyHandlers.ofString())
+		assertEquals(200, delResp.statusCode())
+
+		// Verify 404 after deletion
+		val notFoundResp = client.send(getReq, HttpResponse.BodyHandlers.ofString())
+		assertEquals(404, notFoundResp.statusCode())
+	}
 }
